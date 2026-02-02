@@ -7,11 +7,15 @@ const int redLED = 4;
 void do_LED(bool isOK) {
   if (isOK) {
     digitalWrite(greenLED, HIGH);
+    // green light is on
     digitalWrite(redLED, LOW);
+    // red light is off
   }
   else {
     digitalWrite(greenLED, LOW);
+    // green light is off
     digitalWrite(redLED, HIGH);
+    //red light is on
   }
 }
 
