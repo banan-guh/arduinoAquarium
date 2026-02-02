@@ -1,12 +1,8 @@
 const int threshold = 900;
 const int greenLED = 3;
-const int redLED =   4;
-// Too high floats: A5 (upper), A7 (lower)
-// Too low floats:  A1 (upper), A# (lower)
-const int pinHighTop =    A5;
-const int pinHighBottom = A7;
-//const int pinLowTop =     A1;
-//const int pinLowBottom =  A#;
+const int redLED = 4;
+// A5, A7
+
 
 void do_LED(bool isOK) {
   if (isOK) {
@@ -26,11 +22,9 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  int readOne = digitalRead(A5);
-  int readTwo = digitalRead(A7);
-  //int readThree = analogRead();
-  //int readFour = analogRead();
-
+  int readOne = analogRead(A5);
+  int readTwo = analogRead(A7);
+  
   bool isOneTriggered = (readOne < threshold);
   bool isTwoTriggered = (readTwo < threshold);
 
@@ -42,3 +36,4 @@ void loop() {
 
   do_LED(isOK);
 }
+//I was here
