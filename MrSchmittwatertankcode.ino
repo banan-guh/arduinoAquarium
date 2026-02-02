@@ -1,41 +1,36 @@
 
-
-const int sensorthresholdtoptank = 2046;
-const int Greentoptank = 3;
-const int Redtoptank = 4;
-const int floatone = 5;
-const int floattwo = 6;
+const int greenLED = 3;
+const int redLED =   4;
+const int floatOne = 5;
+const int floatTwo = 6;
 
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
-  pinMode(Greentoptank, OUTPUT);
-  pinMode(Redtoptank, OUTPUT);
-
- pinMode(floattwo, INPUT_PULLUP);
- pinMode(floatone, INPUT_PULLUP);
+  pinMode(greenLED, OUTPUT);
+  pinMode(redLED,   OUTPUT);
+  
+  pinMode(floatTwo, INPUT_PULLUP);
+  pinMode(floatOne, INPUT_PULLUP);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
-  int levelone = digitalRead(floatone);
-  int leveltwo = digitalRead(floattwo);
-//  float waterlevelbottomtankone = analogRead(A1);
+  int readOne = digitalRead(floatOne);
+  int readTwo = digitalRead(floatTwo);
 
-bool float1up = (digitalRead(levelone) == LOW);
-bool float2up = (digitalRead(leveltwo)== LOW);
+  bool isFloatOneUp = (readOne == LOW);
+  bool isFloatTwoUp = (readTwo == LOW);
+  
+  //Serial.println(isFloatOneUp);
+  //Serial.println(isFloatTwoUp);
 
-Serial.println(float1up);
-Serial.println(float2up);
-
-
- // Serial.println(waterleveltoptanktwo);
-
- if (float2up or float1up) {
-   digitalWrite(Redtoptank,LOW);
-    digitalWrite(Greentoptank, HIGH);
-  }else{
-     digitalWrite(Redtoptank, HIGH);
-    digitalWrite(Greentoptank, LOW); 
+  if (isFloatOneUp and isFloatTwoUp) {
+    digitalWrite(redLED,  HIGH);
+    digitalWrite(greenLED, LOW); 
+  }
+  else {
+    digitalWrite(redLED,   LOW);
+    digitalWrite(greenLED, HIGH);
   } 
 }
