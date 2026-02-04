@@ -31,6 +31,8 @@ void loop() {
   }
   else {
     digitalWrite(redLED,   LOW);
+    //red light off
     digitalWrite(greenLED, HIGH);
+    //green light on
   } 
 }
