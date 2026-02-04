@@ -5,7 +5,7 @@ const int floatOne = 5;
 const int floatTwo = 6;
 const int MotorHigh = 11;
 const int MotorLow = 12;
-const int button = 7;
+const int Button = 7;
 const int Relay = 9;
 
 
@@ -20,7 +20,7 @@ void setup() {
   
   pinMode(floatTwo, INPUT_PULLUP);
   pinMode(floatOne, INPUT_PULLUP);
-  pinMode(button, INPUT_PULLUP);
+  pinMode(Button, INPUT_PULLUP);
 
 }
 
@@ -28,23 +28,23 @@ void loop() {
   // put your main code here, to run repeatedly:
   int readOne = digitalRead(floatOne);
   int readTwo = digitalRead(floatTwo);
-  int buttonread = digitalRead(button);
+  int ButtonRead = digitalRead(Button);
   bool isFloatOneUp = (readOne == LOW);
   bool isFloatTwoUp = (readTwo == LOW);
-  bool isbuttonread = (buttonread == LOW);
+  bool isButtonOn = (ButtonRead == LOW);
   //Serial.println(isFloatOneUp);
   //Serial.println(isFloatTwoUp);
  
-  if (isbuttonread) {
-      digitalWrite(Relay, HIGH);
-      digitalWrite(MotorHigh, HIGH);
-      digitalWrite(MotorLow, LOW);
- }else{
-      digitalWrite(MotorHigh, LOW);
-      digitalWrite(MotorLow, LOW);
-      digitalWrite(Relay, LOW);
- }
-   
+  if (isButtonOn) {
+    digitalWrite(Relay, HIGH);
+    digitalWrite(MotorHigh, HIGH);
+    digitalWrite(MotorLow, LOW);
+  }
+  else {
+    digitalWrite(MotorHigh, LOW);
+    digitalWrite(MotorLow, LOW);
+    digitalWrite(Relay, LOW);
+  }
   
   if (isFloatOneUp and isFloatTwoUp) {
     digitalWrite(redLED,  HIGH);
@@ -52,8 +52,6 @@ void loop() {
   }
   else {
     digitalWrite(redLED,   LOW);
-    //red light off
     digitalWrite(greenLED, HIGH);
-    //green light on
   } 
 }
