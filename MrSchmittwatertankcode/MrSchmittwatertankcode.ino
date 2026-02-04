@@ -6,6 +6,7 @@ const int floatTwo = 6;
 const int MotorHigh = 11;
 const int MotorLow = 12;
 const int button = 7;
+const int Relay = 9;
 
 
 void setup() {
@@ -15,10 +16,12 @@ void setup() {
   pinMode(redLED,   OUTPUT);
   pinMode(MotorHigh, OUTPUT);
   pinMode(MotorLow, OUTPUT);
+  pinMode(Relay, OUTPUT);
   
   pinMode(floatTwo, INPUT_PULLUP);
   pinMode(floatOne, INPUT_PULLUP);
   pinMode(button, INPUT_PULLUP);
+
 }
 
 void loop() {
@@ -33,11 +36,13 @@ void loop() {
   //Serial.println(isFloatTwoUp);
  
   if (isbuttonread) {
+      digitalWrite(Relay, HIGH);
       digitalWrite(MotorHigh, HIGH);
       digitalWrite(MotorLow, LOW);
  }else{
       digitalWrite(MotorHigh, LOW);
       digitalWrite(MotorLow, LOW);
+      digitalWrite(Relay, LOW);
  }
    
   
@@ -52,4 +57,3 @@ void loop() {
     //green light on
   } 
 }
-//qwerty
