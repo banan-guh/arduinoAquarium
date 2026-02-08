@@ -1,15 +1,24 @@
-
+#include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
 const int LEDPin = 14;
-const String ssid = "SD23 Guest";
-const String password = "aquarium";
+const String ssid = "yuh 9001";//"SD23 Guest";
+const String password = "ErmDying";
 
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
   pinMode(LEDPin, OUTPUT);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("Connected!");
+  delay(5000);
 }
 
 void loop() {
@@ -19,6 +28,7 @@ void loop() {
   digitalWrite(LEDPin, LOW);
   delay(1000);
   httpsRequest(200);
+  Serial.println("hi");
 }
 
 void httpsRequest(int status) {
@@ -34,7 +44,7 @@ void httpsRequest(int status) {
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     int httpCode = http.GET();
 
-    Serial.println(httpCode);
+    //Serial.println(httpCode);
     http.end();
   }
 }
