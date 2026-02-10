@@ -2,33 +2,38 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
-const int LEDPin = 14;
-const String ssid = "yuh 9001";//"SD23 Guest";
-const String password = "ErmDying";
+const int LEDPin = 27;
+const int sensorOnePin = 25;
+
+const String ssid = "SD23 IOT";
+const String password = "????";
 
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
+  pinMode(sensorOnePin, INPUT_PULLUP);
   pinMode(LEDPin, OUTPUT);
 
   WiFi.begin(ssid, password);
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("Connected!");
-  delay(5000);
+  Serial.print("Connecting...");
+  //while (WiFi.status() != WL_CONNECTED) {
+    //delay(500);
+    //Serial.print(".");
+  //}
+  Serial.println(" Connected!");
+  delay(1000);
 }
 
 void loop() {
   // put your main code here, to run repeatedly:
   digitalWrite(LEDPin, HIGH);
-  delay(1000);
-  digitalWrite(LEDPin, LOW);
-  delay(1000);
-  httpsRequest(200);
-  Serial.println("hi");
+  //delay(10);
+  //digitalWrite(LEDPin, LOW);
+  //delay(10);
+  //httpsRequest(200);
+  int isFloatOneActivated = analogRead(sensorOnePin);
+  Serial.println(isFloatOneActivated);
 }
 
 void httpsRequest(int status) {
