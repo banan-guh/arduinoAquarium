@@ -2,8 +2,14 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
-const int LEDPin = 27;
-const int sensorOnePin = 25;
+const int greenLED = 32;
+const int redLED =   27;
+const int floatOne = 25;
+const int floatTwo = 34;
+//const int MotorHigh = 11;
+//const int MotorLow = 12;
+const int Button = 13;
+//const int Relay = 9;
 
 const String ssid = "SD23 IOT";
 const String password = "????";
@@ -11,8 +17,15 @@ const String password = "????";
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
-  pinMode(sensorOnePin, INPUT_PULLUP);
-  pinMode(LEDPin, OUTPUT);
+  pinMode(greenLED, OUTPUT);
+  pinMode(redLED,   OUTPUT);
+  //pinMode(MotorHigh, OUTPUT);
+  //pinMode(MotorLow, OUTPUT);
+  //pinMode(Relay, OUTPUT);
+  
+  pinMode(floatTwo, INPUT_PULLUP);
+  pinMode(floatOne, INPUT_PULLUP);
+  pinMode(Button, INPUT_PULLUP);
 
   WiFi.begin(ssid, password);
 
@@ -26,14 +39,36 @@ void setup() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  digitalWrite(LEDPin, HIGH);
-  //delay(10);
-  //digitalWrite(LEDPin, LOW);
-  //delay(10);
   //httpsRequest(200);
-  int isFloatOneActivated = analogRead(sensorOnePin);
-  Serial.println(isFloatOneActivated);
+  int readOne = digitalRead(floatOne);
+  int readTwo = digitalRead(floatTwo);
+  int ButtonRead = digitalRead(Button);
+  bool isFloatOneUp = (readOne == LOW);
+  bool isFloatTwoUp = (readTwo == LOW);
+  bool isButtonOn = (ButtonRead == LOW);
+  //Serial.println(isFloatOneUp);
+  //Serial.println(isFloatTwoUp);
+  Serial.println(isButtonOn);
+  if (isButtonOn) {
+    //digitalWrite(Relay, HIGH);
+    //digitalWrite(MotorHigh, HIGH);
+    //digitalWrite(MotorLow, LOW);
+    Serial.println("guh uuh");
+  }
+  else {
+    //digitalWrite(MotorHigh, LOW);
+    //digitalWrite(MotorLow, LOW);
+    //digitalWrite(Relay, LOW);
+  }
+  
+  if (isFloatOneUp and isFloatTwoUp) {
+    digitalWrite(redLED,  HIGH);
+    digitalWrite(greenLED, LOW); 
+  }
+  else {
+    digitalWrite(redLED,   LOW);
+    digitalWrite(greenLED, HIGH);
+  }
 }
 
 void httpsRequest(int status) {
@@ -49,7 +84,7 @@ void httpsRequest(int status) {
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
     int httpCode = http.GET();
 
-    //Serial.println(httpCode);
+    Serial.println(httpCode);
     http.end();
   }
 }
