@@ -4,12 +4,12 @@
 
 const int greenLED = 32;
 const int redLED =   27;
-const int floatOne = 25;
-const int floatTwo = 34;
+const int floatOne = 33;
+const int floatTwo = 25;
 const int MotorHigh = 23;
 const int MotorLow = 22;
 const int Button = 13;
-const int Relay = 5;
+const int Relay = 4;
 
 const String ssid = "SD23 IOT";
 const String password = "????";
@@ -47,13 +47,13 @@ void loop() {
   bool isFloatTwoUp = (readTwo == LOW);
   bool isButtonOn = (ButtonRead == LOW);
   //Serial.println(isFloatOneUp);
-  //Serial.println(isFloatTwoUp);
-  Serial.println(isButtonOn);
+  Serial.println(isFloatTwoUp);
+  //Serial.println(isButtonOn);
   if (isButtonOn) {
     digitalWrite(Relay, HIGH);
     //digitalWrite(MotorHigh, HIGH);
     //digitalWrite(MotorLow, LOW);
-    Serial.println("guh uuh");
+    //Serial.println("guh uuh");
   }
   else {
     //digitalWrite(MotorHigh, LOW);
@@ -61,7 +61,7 @@ void loop() {
     digitalWrite(Relay, LOW);
   }
   
-  if (isFloatOneUp and isFloatTwoUp) {
+  if (isFloatTwoUp && isFloatOneUp) {
     digitalWrite(redLED,  HIGH);
     digitalWrite(greenLED, LOW); 
   }
