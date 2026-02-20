@@ -6,10 +6,10 @@ const int greenLED = 32;
 const int redLED =   27;
 const int floatOne = 25;
 const int floatTwo = 34;
-//const int MotorHigh = 11;
-//const int MotorLow = 12;
+const int MotorHigh = 23;
+const int MotorLow = 22;
 const int Button = 13;
-//const int Relay = 9;
+const int Relay = 5;
 
 const String ssid = "SD23 IOT";
 const String password = "????";
@@ -21,7 +21,7 @@ void setup() {
   pinMode(redLED,   OUTPUT);
   //pinMode(MotorHigh, OUTPUT);
   //pinMode(MotorLow, OUTPUT);
-  //pinMode(Relay, OUTPUT);
+  pinMode(Relay, OUTPUT);
   
   pinMode(floatTwo, INPUT_PULLUP);
   pinMode(floatOne, INPUT_PULLUP);
@@ -50,7 +50,7 @@ void loop() {
   //Serial.println(isFloatTwoUp);
   Serial.println(isButtonOn);
   if (isButtonOn) {
-    //digitalWrite(Relay, HIGH);
+    digitalWrite(Relay, HIGH);
     //digitalWrite(MotorHigh, HIGH);
     //digitalWrite(MotorLow, LOW);
     Serial.println("guh uuh");
@@ -58,7 +58,7 @@ void loop() {
   else {
     //digitalWrite(MotorHigh, LOW);
     //digitalWrite(MotorLow, LOW);
-    //digitalWrite(Relay, LOW);
+    digitalWrite(Relay, LOW);
   }
   
   if (isFloatOneUp and isFloatTwoUp) {
