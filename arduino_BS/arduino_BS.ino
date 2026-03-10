@@ -18,6 +18,11 @@ const int RelayPin = 4;
 const String ssid = "SD23 IOT";
 const String password = "????";
 
+// for takereading func below
+int sensorPins[] = { floatTopUpPin, floatTopDownPin, floatBottomDownPin };
+int strikeCounters[] = { 0, 0, 0 };
+bool stableReadings[] = { false, false, false };
+
 
 void setup() {
   Serial.begin(115200);
@@ -32,9 +37,9 @@ void setup() {
 
   pinMode(RelayPin, OUTPUT);
   
-  pinMode(floatTopUpPin, INPUT_PULLUP);
-  pinMode(floatTopDownPin, INPUT_PULLUP);
-  pinMode(floatBottomDownPin, INPUT_PULLUP);
+  pinMode(floatTopUpPin, INPUT);
+  pinMode(floatTopDownPin, INPUT);
+  pinMode(floatBottomDownPin, INPUT);
 
   WiFi.begin(ssid, password);
 
@@ -55,7 +60,9 @@ void loop() {
   takeStableReadings();
 
   // stablereadings: 0 = top up, 1 = top down, 2 = bottom down
-  Serial.println(String(stableReadings[0]) + ", " + String(stableReadings[1]) + ", " + String(stableReadings[2]));
+  //Serial.println("Readings #1, #2, #3: " + String(stableReadings[0]) + ", " + String(stableReadings[1]) + ", " + String(stableReadings[2]));
+  Serial.println("Readings #1, #2, #3: " + String(takeReading(floatTopUpPin)) + ", " + String(takeReading(floatTopDownPin)) + ", " + String(takeReading(floatBottomDownPin)));
+  //Serial.println("strike:" + String(strikeCounters[0]));
 
   bool sumTingWong = stableReadings[0] || !stableReadings[1] || !stableReadings[2];
   // master controller to check if anything wrong, led control is after
@@ -94,23 +101,23 @@ void loop() {
     digitalWrite(greenLEDBottomPin, HIGH);
   }
 
-  delay(1000); // increase delay later
+  delay(50); // increase delay later
 }
 
 
 unsigned long OneDay = 86400000; // ms
 unsigned long lastOKSmall = millis(); // timestamp: small = update website, no email
-unsigned long lastOkBig = millis(); // timestamp: big = both website and email
+unsigned long lastOKBig = millis(); // timestamp: big = both website and email
 void requestOK() {
   unsigned long currentTime = millis();
   if (currentTime - lastOKBig >= OneDay * 2) {
     httpsRequest(200);
-    lastOkBig = millis();
-    lastOkSmall = millis();
+    lastOKBig = millis();
+    lastOKSmall = millis();
   }
   if (currentTime - lastOKSmall >= OneDay / 6) {
     httpsRequest(201);
-    lastOkSmall = millis();
+    lastOKSmall = millis();
   }
   // else dont do anything
 }
@@ -127,9 +134,7 @@ void requestError() {
 }
 
 
-int sensorPins[] = { floatTopUpPin, floatTopDownPin, floatBottomDownPin };
-int strikeCounters[] = { 0, 0, 0 };
-bool stableReadings[] = { false, false, false };
+// vars used to be here
 
 
 // wrapper for takestablereading
@@ -151,15 +156,15 @@ void takeStableReading(int index) {
   bool reading = takeReading(sensorPins[index]);
   if (reading == true) strikeCounters[index]++;
   else strikeCounters[index]--;
-
   int threshold = 3; // arbitrary number
-  int clampMax = 5; // upper bound of strikecounters
+  int clampMax = 5; // upper bound of strikecounters`
   // sets stablereadings to true if it hits threshold
   if (strikeCounters[index] > threshold) {
     stableReadings[index] = true;
-    strikeCounters[index] = max(0, min(clampMax, strikeCounters[index])); 
   }
   else stableReadings[index] = false;
+
+  strikeCounters[index] = max(0, min(clampMax, strikeCounters[index]));
 }
 
 
@@ -173,6 +178,7 @@ bool takeReading(int pin) {
 
 // Converts analog to digital (self explanatory) - you can change threshold, its arbitrary
 bool analogToDigital(int analog) {
+  //Serial.println(String(analog));
   int threshold = 800;
   if (analog < threshold) return false;
   return true;
@@ -182,6 +188,7 @@ bool analogToDigital(int analog) {
 // sends an https request to the aquariumScream google apps script to send emails, update website, etc.
 // find aquar login on awlms google doccy.
 void httpsRequest(int status) {
+  return; // remove later, this is to not spam apps script
   // 200 status = OK, -1 status = PANIC
   String url = "https://script.google.com/macros/s/AKfycbxCv_mbnUbU8EKLbrP3T5WFFZIns34vBTYhAx_b1ZEHG8KxVdpnt7GYZVgGXJWoTD58/exec";
   url += "?status=" + String(status);
