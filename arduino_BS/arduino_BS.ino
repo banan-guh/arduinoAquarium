@@ -2,21 +2,23 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
-const int greenLEDTopPin = 2;
-const int redLEDTopPin = 23;
-const int greenLEDBottomPin = 13;
-const int redLEDBottomPin = 27;
 
-const int floatTopUpPin = 33;
-const int floatTopDownPin = 25;
-const int floatBottomDownPin = 14;
+//const int greenLEDTopPin = 2;
+//const int redLEDTopPin = 23;
+//const int greenLEDBottomPin = 13;
+//const int redLEDBottomPin = 27;
 
-const int MotorHighPin = 18;
-const int MotorLowPin = 19;
+const int floatTopUpPin = 18;
+const int floatTopDownPin = 19;
+const int floatBottomDownPin = 21;
+
+//const int MotorHighPin = 18;
+//const int MotorLowPin = 19;
 const int RelayPin = 4;
 
 const String ssid = "SD23 IOT";
-const String password = "????";
+const String password = "l!ghtbox98"; // use iot instead of guest, no need for mac spoofing
+
 
 // for takereading func below
 int sensorPins[] = { floatTopUpPin, floatTopDownPin, floatBottomDownPin };
@@ -26,30 +28,28 @@ bool stableReadings[] = { false, false, false };
 
 void setup() {
   Serial.begin(115200);
-
-  pinMode(greenLEDTopPin, OUTPUT);
-  pinMode(redLEDTopPin, OUTPUT);
-  pinMode(greenLEDBottomPin, OUTPUT);
-  pinMode(redLEDBottomPin, OUTPUT);
+  //pinMode(greenLEDTopPin, OUTPUT);
+  //pinMode(redLEDTopPin, OUTPUT);
+  //pinMode(greenLEDBottomPin, OUTPUT);
+  //pinMode(redLEDBottomPin, OUTPUT);
 
   //pinMode(MotorHighPin, OUTPUT);
   //pinMode(MotorLowPin, OUTPUT);
 
   pinMode(RelayPin, OUTPUT);
   
-  pinMode(floatTopUpPin, INPUT);
-  pinMode(floatTopDownPin, INPUT);
-  pinMode(floatBottomDownPin, INPUT);
+  pinMode(floatTopUpPin, INPUT_PULLUP);
+  pinMode(floatTopDownPin, INPUT_PULLUP);
+  pinMode(floatBottomDownPin, INPUT_PULLUP);
 
   WiFi.begin(ssid, password);
-
-  Serial.print("Connecting...");
-  //while (WiFi.status() != WL_CONNECTED) {
-    //delay(200);
-    //Serial.print(".");
-  //}
+  Serial.print("Connecting.");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
   Serial.println(" Connected!");
-  delay(500);
+  delay(1000);
 }
 
 
@@ -57,20 +57,23 @@ void loop() {
   // top = top tank, bottom = bottom tank
   // up = sense when water goes up, down = sense when water goes down
 
+  manageWiFi();
+
   takeStableReadings();
 
   // stablereadings: 0 = top up, 1 = top down, 2 = bottom down
   //Serial.println("Readings #1, #2, #3: " + String(stableReadings[0]) + ", " + String(stableReadings[1]) + ", " + String(stableReadings[2]));
-  Serial.println("Readings #1, #2, #3: " + String(takeReading(floatTopUpPin)) + ", " + String(takeReading(floatTopDownPin)) + ", " + String(takeReading(floatBottomDownPin)));
+  //Serial.println("Readings #1, #2, #3: " + String(digitalRead(floatTopUpPin)) + ", " + String(digitalRead(floatTopDownPin)) + ", " + String(digitalRead(floatBottomDownPin)));
   //Serial.println("strike:" + String(strikeCounters[0]));
 
-  bool sumTingWong = stableReadings[0] || !stableReadings[1] || !stableReadings[2];
+  bool sumTingWong = stableReadings[0]; //|| !stableReadings[1] || !stableReadings[2];
   // master controller to check if anything wrong, led control is after
   if (sumTingWong) {
     digitalWrite(RelayPin, HIGH);
     //digitalWrite(MotorHigh, HIGH);
     //digitalWrite(MotorLow, LOW);
 
+    Serial.println("HELP!!!!");
     requestError();
   }
   else {
@@ -83,25 +86,25 @@ void loop() {
   // ---------- led control -----------
   // Top LED control
   if (stableReadings[0] || !stableReadings[1]) {
-    digitalWrite(redLEDTopPin,  HIGH);
-    digitalWrite(greenLEDTopPin, LOW); 
-  }
+    //digitalWrite(redLEDTopPin,  HIGH);
+    //digitalWrite(greenLEDTopPin, LOW); 
+  } 
   else {
-    digitalWrite(redLEDTopPin,   LOW);
-    digitalWrite(greenLEDTopPin, HIGH);
+    //digitalWrite(redLEDTopPin,   LOW);
+    //digitalWrite(greenLEDTopPin, HIGH);
   }
 
   // Bottom LED control
   if (!stableReadings[2]) {
-    digitalWrite(redLEDBottomPin, HIGH);
-    digitalWrite(greenLEDBottomPin, LOW);
+    //digitalWrite(redLEDBottomPin, HIGH);
+    //digitalWrite(greenLEDBottomPin, LOW);
   }
   else {
-    digitalWrite(redLEDBottomPin, LOW);
-    digitalWrite(greenLEDBottomPin, HIGH);
+    //digitalWrite(redLEDBottomPin, LOW);
+    //digitalWrite(greenLEDBottomPin, HIGH);
   }
 
-  delay(50); // increase delay later
+  delay(1000); // increase delay later
 }
 
 
@@ -136,14 +139,13 @@ void requestError() {
 
 // vars used to be here
 
-
 // wrapper for takestablereading
 void takeStableReadings() {
   for (int x = 0; x < 1; x++) { // take reading x times (using 1 because its too sensitive otherwise)
     for (int i = 0; i < 3; i++) {
       takeStableReading(i);
     }
-    delay(100); // take each reading 0.1 seconds apart
+    delay(10); // take each reading 0.01 seconds apart
   }
 }
 
@@ -153,7 +155,7 @@ void takeStableReadings() {
 // this makes sure false positives are less easy, it makes the program do a bunch of 'hits in a row' before it
 // can activate the actual reading.
 void takeStableReading(int index) {
-  bool reading = takeReading(sensorPins[index]);
+  bool reading = digitalRead(sensorPins[index]);
   if (reading == true) strikeCounters[index]++;
   else strikeCounters[index]--;
   int threshold = 3; // arbitrary number
@@ -168,27 +170,35 @@ void takeStableReading(int index) {
 }
 
 
-// takes reading of a pin. Uses analogToDigital(),
-// as digitalRead() dont work and im too lazy to find out.
-// NOTE: DO NOT ENABLE BLUETOOTH. it disables analogread, if you want to use it then make sure to USE DIGITALREAD.
-bool takeReading(int pin) {
-  return analogToDigital(analogRead(pin));
-}
+unsigned long previousMillis = 0;
+unsigned long reconnectInterval = 1000; // Start with 1 second
+const unsigned long maxInterval = 300000; // Max 5 minutes (300,000 ms)
 
 
-// Converts analog to digital (self explanatory) - you can change threshold, its arbitrary
-bool analogToDigital(int analog) {
-  //Serial.println(String(analog));
-  int threshold = 800;
-  if (analog < threshold) return false;
-  return true;
+void manageWiFi() {
+  static unsigned long nextRetry = 0;
+  static unsigned long interval = 5000; // Start with 5 seconds
+
+  if (WiFi.status() == WL_CONNECTED) {
+    interval = 5000; // Reset delay when connected
+    return;
+  }
+
+  if (millis() > nextRetry) {
+    Serial.println("Reconnecting...");
+    WiFi.disconnect();
+    WiFi.begin(ssid, password);
+    
+    nextRetry = millis() + interval;
+    interval = min(interval * 2, 3600000UL); // Double it, max 1 hour
+  }
 }
 
 
 // sends an https request to the aquariumScream google apps script to send emails, update website, etc.
 // find aquar login on awlms google doccy.
 void httpsRequest(int status) {
-  return; // remove later, this is to not spam apps script
+  if (WiFi.status() != WL_CONNECTED) return;
   // 200 status = OK, -1 status = PANIC
   String url = "https://script.google.com/macros/s/AKfycbxCv_mbnUbU8EKLbrP3T5WFFZIns34vBTYhAx_b1ZEHG8KxVdpnt7GYZVgGXJWoTD58/exec";
   url += "?status=" + String(status);
