@@ -2,6 +2,8 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
+// Old MAC Address: 6C:C8:40:89:A0:3C
+
 
 //const int greenLEDTopPin = 2;
 //const int redLEDTopPin = 23;
