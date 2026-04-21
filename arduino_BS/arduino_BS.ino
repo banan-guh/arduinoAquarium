@@ -1,22 +1,18 @@
 #include <WiFi.h>
+#include <esp_wifi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
-// Old MAC Address: 6C:C8:40:89:A0:3C
+// Old MAC Address: 6C:C8                                                                                                                                                                                                         :40:89:A0:3C
+uint8_t newMACAddress[] = {0x6C, 0xC8, 0x40, 0x89, 0xA0, 0x3C};
 
+const int floatTopUpPin = 25;
+const int floatTopDownPin = 26;
+const int floatBottomDownPin = 27;
 
-//const int greenLEDTopPin = 2;
-//const int redLEDTopPin = 23;
-//const int greenLEDBottomPin = 13;
-//const int redLEDBottomPin = 27;
-
-const int floatTopUpPin = 18;
-const int floatTopDownPin = 19;
-const int floatBottomDownPin = 21;
-
-//const int MotorHighPin = 18;
-//const int MotorLowPin = 19;
-const int RelayPin = 4;
+//const int MotorHighPin = 32;
+//const int MotorLowPin = 33;
+const int RelayPin = 23;
 
 const String ssid = "SD23 IOT";
 const String password = "l!ghtbox98"; // use iot instead of guest, no need for mac spoofing
@@ -30,13 +26,6 @@ bool stableReadings[] = { false, false, false };
 
 void setup() {
   Serial.begin(115200);
-  //pinMode(greenLEDTopPin, OUTPUT);
-  //pinMode(redLEDTopPin, OUTPUT);
-  //pinMode(greenLEDBottomPin, OUTPUT);
-  //pinMode(redLEDBottomPin, OUTPUT);
-
-  //pinMode(MotorHighPin, OUTPUT);
-  //pinMode(MotorLowPin, OUTPUT);
 
   pinMode(RelayPin, OUTPUT);
   
@@ -44,7 +33,18 @@ void setup() {
   pinMode(floatTopDownPin, INPUT_PULLUP);
   pinMode(floatBottomDownPin, INPUT_PULLUP);
 
+  WiFi.mode(WIFI_STA);
+  WiFi.STA.begin();
+
+  delay(500);
+
+  esp_err_t err = esp_wifi_set_mac(WIFI_IF_STA, &newMACAddress[0]);
+  if (err == ESP_OK) {
+    Serial.println("Success changing Mac Address");
+  }
+
   WiFi.begin(ssid, password);
+
   Serial.print("Connecting.");
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
@@ -63,12 +63,12 @@ void loop() {
 
   takeStableReadings();
 
-  // stablereadings: 0 = top up, 1 = top down, 2 = bottom down
+  // stablereadings: 0 = top up (25), 1 = bottom up (26), 2 = bottom down (27)
   //Serial.println("Readings #1, #2, #3: " + String(stableReadings[0]) + ", " + String(stableReadings[1]) + ", " + String(stableReadings[2]));
   //Serial.println("Readings #1, #2, #3: " + String(digitalRead(floatTopUpPin)) + ", " + String(digitalRead(floatTopDownPin)) + ", " + String(digitalRead(floatBottomDownPin)));
   //Serial.println("strike:" + String(strikeCounters[0]));
 
-  bool sumTingWong = stableReadings[0]; //|| !stableReadings[1] || !stableReadings[2];
+  bool sumTingWong = !stableReadings[0] || !stableReadings[1] || !stableReadings[2];
   // master controller to check if anything wrong, led control is after
   if (sumTingWong) {
     digitalWrite(RelayPin, HIGH);
@@ -83,6 +83,7 @@ void loop() {
     //digitalWrite(MotorLow, LOW);
     digitalWrite(RelayPin, LOW);
     requestOK();
+    Serial.println("pins: " + String(stableReadings[0]));
   }
   
   // ---------- led control -----------
@@ -106,7 +107,7 @@ void loop() {
     //digitalWrite(greenLEDBottomPin, HIGH);
   }
 
-  delay(1000); // increase delay later
+  delay(100); // increase delay later
 }
 
 
