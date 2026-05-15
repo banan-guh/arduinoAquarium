@@ -3,8 +3,9 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 
-// Old MAC Address: 6C:C8                                                                                                                                                                                                         :40:89:A0:3C
+// Old MAC Address: 6C:C8:40:89:A0:3C
 uint8_t newMACAddress[] = {0x6C, 0xC8, 0x40, 0x89, 0xA0, 0x3C};
+
 
 const int floatTopUpPin = 25;
 const int floatTopDownPin = 26;
@@ -13,9 +14,13 @@ const int floatBottomDownPin = 27;
 //const int MotorHighPin = 32;
 //const int MotorLowPin = 33;
 const int RelayPin = 23;
+const int debugLED = 21;
 
-const String ssid = "SD23 IOT";
-const String password = "l!ghtbox98"; // use iot instead of guest, no need for mac spoofing
+//const String ssid = "SD23 IOT";
+//const String password = "l!ghtbox98"; // use iot instead of guest, no need for mac spoofing
+const String ssid = "yuh 9001";
+const String password = "ErmDying";
+
 
 
 // for takereading func below
@@ -23,36 +28,92 @@ int sensorPins[] = { floatTopUpPin, floatTopDownPin, floatBottomDownPin };
 int strikeCounters[] = { 0, 0, 0 };
 bool stableReadings[] = { false, false, false };
 
+void flashLED(int delayTime = 50) {
+  digitalWrite(debugLED, HIGH);
+  delay(delayTime);
+  digitalWrite(debugLED, LOW);
+}
+
+void WiFiEvent(arduino_event_id_t event) {
+  switch (event) {
+    case ARDUINO_EVENT_WIFI_STA_START:
+      Serial.println("WiFi client started");
+      break;
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+      Serial.println("Connected to access point");
+      break;
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+      Serial.print("IP obtained: ");
+      Serial.println(WiFi.localIP());
+      break;
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+      Serial.println("Connection failed or lost");
+      break;
+  }
+}
+
+IPAddress staticIP(10, 132, 144, 150);// Desired Static IP
+IPAddress gateway(10, 132, 144, 1);   // Router IP
+IPAddress subnet(255, 255, 240, 0);   // Subnet Mask
+IPAddress primaryDNS(8, 8, 8, 8);     // Optional DNS
+IPAddress secondaryDNS(0, 0, 0, 0);   // Optional DNS
 
 void setup() {
   Serial.begin(115200);
-
   pinMode(RelayPin, OUTPUT);
+  pinMode(debugLED, OUTPUT);
   
   pinMode(floatTopUpPin, INPUT_PULLUP);
   pinMode(floatTopDownPin, INPUT_PULLUP);
   pinMode(floatBottomDownPin, INPUT_PULLUP);
 
-  WiFi.mode(WIFI_STA);
-  WiFi.STA.begin();
+  //WiFi.config(staticIP, gateway, subnet, primaryDNS, secondaryDNS);
 
   delay(500);
 
-  esp_err_t err = esp_wifi_set_mac(WIFI_IF_STA, &newMACAddress[0]);
-  if (err == ESP_OK) {
-    Serial.println("Success changing Mac Address");
-  }
+  Serial.println("---------------------------------------------");
+
+  flashLED(500);
+  WiFi.setSleep(false);
+  //WiFi.mode(WIFI_STA);
+  WiFi.STA.begin();
+  
+  delay(500);
+
+  //esp_err_t err = esp_wifi_set_mac(WIFI_IF_STA, &newMACAddress[0]);
+  //if (err == ESP_OK) {
+    //Serial.println("\nSuccess changing Mac Address");
+  //}
+  //else { Serial.println("crap"); }
+  Serial.println(WiFi.macAddress());
+  //Serial.print("Connecting.");
+  WiFi.onEvent(WiFiEvent);
 
   WiFi.begin(ssid, password);
 
-  Serial.print("Connecting.");
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
+    flashLED(500);
     delay(500);
+    
   }
   Serial.println(" Connected!");
+  for (int i = 0; i < 10; i++) {
+    takeStableReadings();
+  }
+
+  Serial.println(WiFi.gatewayIP());
   delay(1000);
 }
+
+// from requestOK, have to put here for loop to recognize
+unsigned long OneDay = 86400000; // ms
+unsigned long lastOKSmall = 0; // initialize at 0
+unsigned long lastOKBig = 0; // initialize at 0
+
+bool firstOKSmall = true;
+bool firstOKBig = true;
+bool firstError = true;
 
 
 void loop() {
@@ -63,12 +124,12 @@ void loop() {
 
   takeStableReadings();
 
-  // stablereadings: 0 = top up (25), 1 = bottom up (26), 2 = bottom down (27)
+  // stablereadings: 0 = top up (27), 1 = bottom up (26), 2 = bottom down (25)
   //Serial.println("Readings #1, #2, #3: " + String(stableReadings[0]) + ", " + String(stableReadings[1]) + ", " + String(stableReadings[2]));
   //Serial.println("Readings #1, #2, #3: " + String(digitalRead(floatTopUpPin)) + ", " + String(digitalRead(floatTopDownPin)) + ", " + String(digitalRead(floatBottomDownPin)));
   //Serial.println("strike:" + String(strikeCounters[0]));
 
-  bool sumTingWong = !stableReadings[0] || !stableReadings[1] || !stableReadings[2];
+  bool sumTingWong = stableReadings[0] || !stableReadings[1] || !stableReadings[2];
   // master controller to check if anything wrong, led control is after
   if (sumTingWong) {
     digitalWrite(RelayPin, HIGH);
@@ -76,14 +137,20 @@ void loop() {
     //digitalWrite(MotorLow, LOW);
 
     Serial.println("HELP!!!!");
+    flashLED(50);
+    delay(100);
+    flashLED(50);
+    delay(500);
     requestError();
   }
   else {
-    //digitalWrite(MotorHigh, LOW);
-    //digitalWrite(MotorLow, LOW);
+    if (!firstError) {
+      firstOKBig = true;
+      Serial.println("Forcing 200 status");
+    }
     digitalWrite(RelayPin, LOW);
+    firstError = true;
     requestOK();
-    Serial.println("pins: " + String(stableReadings[0]));
   }
   
   // ---------- led control -----------
@@ -111,19 +178,19 @@ void loop() {
 }
 
 
-unsigned long OneDay = 86400000; // ms
-unsigned long lastOKSmall = millis(); // timestamp: small = update website, no email
-unsigned long lastOKBig = millis(); // timestamp: big = both website and email
 void requestOK() {
   unsigned long currentTime = millis();
-  if (currentTime - lastOKBig >= OneDay * 2) {
+  if (firstOKBig || currentTime - lastOKBig >= OneDay * 2) {
     httpsRequest(200);
     lastOKBig = millis();
     lastOKSmall = millis();
+    firstOKBig = false;
+    firstOKSmall = false; // reset small one too
   }
-  if (currentTime - lastOKSmall >= OneDay / 6) {
+  else if (firstOKSmall || currentTime - lastOKSmall >= OneDay / 24) {
     httpsRequest(201);
     lastOKSmall = millis();
+    firstOKSmall = false;
   }
   // else dont do anything
 }
@@ -132,15 +199,15 @@ void requestOK() {
 unsigned long lastError = 0; // last error timestamp
 void requestError() {
   unsigned long currentTime = millis();
-  if (currentTime - lastError >= OneDay / 48) { // screams every 30 mins
+  if (firstError || currentTime - lastError >= OneDay / 48) { // screams every 30 mins
     httpsRequest(-1);
+    Serial.println("sent!");
     lastError = millis();
+    firstError = false; // Stop it from firing continuously
   }
+  else {Serial.println("blocked - timeout");}
   // else dont do anything
 }
-
-
-// vars used to be here
 
 // wrapper for takestablereading
 void takeStableReadings() {
@@ -179,20 +246,19 @@ const unsigned long maxInterval = 300000; // Max 5 minutes (300,000 ms)
 
 
 void manageWiFi() {
-  static unsigned long nextRetry = 0;
-  static unsigned long interval = 5000; // Start with 5 seconds
+  static unsigned long lastRetry = 0;
+  static unsigned long interval = 10000; // Start with 10 seconds
 
   if (WiFi.status() == WL_CONNECTED) {
-    interval = 5000; // Reset delay when connected
+    interval = 60000; // Reset delay when connected
     return;
   }
-
-  if (millis() > nextRetry) {
+  
+  if (lastRetry == 0 || millis() - lastRetry >= interval) {
     Serial.println("Reconnecting...");
-    WiFi.disconnect();
-    WiFi.begin(ssid, password);
+    WiFi.reconnect(); // Much safer/cleaner than disconnect() + begin()
     
-    nextRetry = millis() + interval;
+    lastRetry = millis();
     interval = min(interval * 2, 3600000UL); // Double it, max 1 hour
   }
 }
@@ -201,21 +267,42 @@ void manageWiFi() {
 // sends an https request to the aquariumScream google apps script to send emails, update website, etc.
 // find aquar login on awlms google doccy.
 void httpsRequest(int status) {
-  if (WiFi.status() != WL_CONNECTED) return;
-  // 200 status = OK, -1 status = PANIC
-  String url = "https://script.google.com/macros/s/AKfycbxCv_mbnUbU8EKLbrP3T5WFFZIns34vBTYhAx_b1ZEHG8KxVdpnt7GYZVgGXJWoTD58/exec";
-  url += "?status=" + String(status);
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi not connected, skipping request.");
+    return;
+  }
 
-  WiFiClientSecure client;
-  client.setInsecure();
+  // 1. Declare the client LOCALLY so it resets every time
+  WiFiClientSecure secureClient; 
+  secureClient.setInsecure();
+  // secureClient.setTimeout(15000); // Optional, but usually good to keep
+
+  String url = "https://script.google.com/macros/s/AKfycbydJjaLl7ykkEbpGcqZB-bQGoa4jnrq9skWRvU00BoBAst9lSNDwM60rFoqrgd__ClJ/exec";
+  url += "?status=" + String(status);
 
   HTTPClient http;
 
-  if(http.begin(client, url)) {
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  Serial.println("Connecting to server...");
+  if (http.begin(secureClient, url)) {
+    
+    // 2. FORCE following redirects to ensure variables aren't dropped
+    http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS); 
+    
     int httpCode = http.GET();
-
+    Serial.print("HTTP Code: ");
     Serial.println(httpCode);
+
+    if (httpCode > 0) {
+      // 3. Print the payload to confirm Google didn't send a Login page
+      String payload = http.getString();
+      Serial.println("Payload from Google:");
+      Serial.println(payload);
+    } else {
+      Serial.printf("HTTP GET failed, error: %s\n", http.errorToString(httpCode).c_str());
+    }
+    
     http.end();
+  } else {
+    Serial.println("Failed to connect to server.");
   }
 }
