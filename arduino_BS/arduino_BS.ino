@@ -2,36 +2,103 @@
 #include <esp_wifi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/queue.h>
 
-// Old MAC Address: 6C:C8:40:89:A0:3C
+// Old MAC Address: 6C:C8:40:89:A0:3C - DONT USE!!!
 uint8_t newMACAddress[] = {0x6C, 0xC8, 0x40, 0x89, 0xA0, 0x3C};
-
 
 const int floatTopUpPin = 25;
 const int floatTopDownPin = 26;
 const int floatBottomDownPin = 27;
 
-//const int MotorHighPin = 32;
-//const int MotorLowPin = 33;
 const int RelayPin = 23;
 const int debugLED = 21;
 
-//const String ssid = "SD23 IOT";
-//const String password = "l!ghtbox98"; // use iot instead of guest, no need for mac spoofing
-const String ssid = "yuh 9001";
-const String password = "ErmDying";
+const String ssid = "SD23 IOT";
+const String password = "l!ghtbox98"; 
 
-
-
-// for takereading func below
 int sensorPins[] = { floatTopUpPin, floatTopDownPin, floatBottomDownPin };
 int strikeCounters[] = { 0, 0, 0 };
 bool stableReadings[] = { false, false, false };
 
-void flashLED(int delayTime = 50) {
-  digitalWrite(debugLED, HIGH);
-  delay(delayTime);
-  digitalWrite(debugLED, LOW);
+// --- FREE RTOS & LED STATES ---
+QueueHandle_t requestQueue;
+
+enum LedMode {
+  LED_WIFI_CONNECTING,
+  LED_WIFI_CONNECTED_SUCCESS,
+  LED_NORMAL,
+  LED_ERROR
+};
+volatile LedMode currentLedMode = LED_WIFI_CONNECTING;
+
+void smartDelay(int ms) {
+  LedMode startMode = currentLedMode; 
+  
+  // Break the delay down into tiny 25-millisecond checks
+  for (int i = 0; i < ms; i += 25) {
+    if (currentLedMode != startMode) {
+      return; // The state changed! Abort the delay instantly.
+    }
+    vTaskDelay(pdMS_TO_TICKS(50)); 
+  }
+}
+
+// ---------------- BACKGROUND LED TASK ----------------
+void ledTask(void *pvParameters) {
+  for(;;) {
+    switch (currentLedMode) {
+      case LED_WIFI_CONNECTING:
+        // "Slow flash on top of fast flash" (Short, Short, Long pattern)
+        digitalWrite(debugLED, HIGH); smartDelay(50);
+        digitalWrite(debugLED, LOW);  smartDelay(100);
+        digitalWrite(debugLED, HIGH); smartDelay(50);
+        digitalWrite(debugLED, LOW);  smartDelay(100);
+        digitalWrite(debugLED, HIGH); smartDelay(600); // The slow flash
+        digitalWrite(debugLED, LOW);  smartDelay(400);
+        break;
+        
+      case LED_WIFI_CONNECTED_SUCCESS:
+        // 2 seconds solid to show successful connection, then move to normal
+        digitalWrite(debugLED, HIGH);
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        currentLedMode = LED_NORMAL; 
+        break;
+        
+      case LED_NORMAL:
+        // Brief blip every 10 seconds to prove the board hasn't frozen
+        digitalWrite(debugLED, HIGH); vTaskDelay(pdMS_TO_TICKS(50));
+        digitalWrite(debugLED, LOW);  smartDelay(9950);
+        break;
+
+      case LED_ERROR:
+        // Frantic, rapid flashing
+        digitalWrite(debugLED, HIGH); vTaskDelay(pdMS_TO_TICKS(50));
+        digitalWrite(debugLED, LOW);  vTaskDelay(pdMS_TO_TICKS(450));
+        break;
+    }
+  }
+}
+
+// ---------------- BACKGROUND HTTP TASK ----------------
+void httpTask(void *pvParameters) {
+  int statusToReport;
+  for(;;) {
+    // This waits indefinitely for an item in the queue.
+    if (xQueueReceive(requestQueue, &statusToReport, portMAX_DELAY)) {
+      
+      // NEW: If we have a request, but WiFi isn't connected yet, 
+      // wait patiently in the background until it is!
+      while (WiFi.status() != WL_CONNECTED) {
+        vTaskDelay(pdMS_TO_TICKS(500)); // Check again every half second
+      }
+
+      // WiFi is connected! Safe to send to Google.
+      httpsRequest(statusToReport); 
+    }
+  }
 }
 
 void WiFiEvent(arduino_event_id_t event) {
@@ -52,12 +119,6 @@ void WiFiEvent(arduino_event_id_t event) {
   }
 }
 
-IPAddress staticIP(10, 132, 144, 150);// Desired Static IP
-IPAddress gateway(10, 132, 144, 1);   // Router IP
-IPAddress subnet(255, 255, 240, 0);   // Subnet Mask
-IPAddress primaryDNS(8, 8, 8, 8);     // Optional DNS
-IPAddress secondaryDNS(0, 0, 0, 0);   // Optional DNS
-
 void setup() {
   Serial.begin(115200);
   pinMode(RelayPin, OUTPUT);
@@ -67,80 +128,71 @@ void setup() {
   pinMode(floatTopDownPin, INPUT_PULLUP);
   pinMode(floatBottomDownPin, INPUT_PULLUP);
 
-  //WiFi.config(staticIP, gateway, subnet, primaryDNS, secondaryDNS);
+  // 1. Initialize Queue (Holds up to 10 HTTP requests)
+  requestQueue = xQueueCreate(10, sizeof(int));
+
+  // 2. Start Background Tasks
+  xTaskCreate(ledTask, "LED_TASK", 2048, NULL, 1, NULL);
+  xTaskCreate(httpTask, "HTTP_TASK", 8192, NULL, 1, NULL); // Larger stack for TLS/SSL
 
   delay(500);
-
   Serial.println("---------------------------------------------");
-
-  flashLED(500);
-  WiFi.setSleep(false);
-  //WiFi.mode(WIFI_STA);
-  WiFi.STA.begin();
   
+  WiFi.setSleep(false);
+  WiFi.STA.begin();
+  WiFi.setScanMethod(WIFI_FAST_SCAN);
   delay(500);
 
-  //esp_err_t err = esp_wifi_set_mac(WIFI_IF_STA, &newMACAddress[0]);
-  //if (err == ESP_OK) {
-    //Serial.println("\nSuccess changing Mac Address");
-  //}
-  //else { Serial.println("crap"); }
   Serial.println(WiFi.macAddress());
-  //Serial.print("Connecting.");
   WiFi.onEvent(WiFiEvent);
 
-  WiFi.begin(ssid, password);
+  Serial.println("Initiating WiFi connection in background...");
+  WiFi.begin(ssid, password); // Non-blocking connection
 
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print(".");
-    flashLED(500);
-    delay(500);
-    
-  }
-  Serial.println(" Connected!");
   for (int i = 0; i < 10; i++) {
     takeStableReadings();
   }
-
-  Serial.println(WiFi.gatewayIP());
-  delay(1000);
 }
 
-// from requestOK, have to put here for loop to recognize
 unsigned long OneDay = 86400000; // ms
-unsigned long lastOKSmall = 0; // initialize at 0
-unsigned long lastOKBig = 0; // initialize at 0
+unsigned long lastOKSmall = 0; 
+unsigned long lastOKBig = 0; 
 
 bool firstOKSmall = true;
 bool firstOKBig = true;
 bool firstError = true;
 
+bool triggered = false;
 
 void loop() {
-  // top = top tank, bottom = bottom tank
-  // up = sense when water goes up, down = sense when water goes down
-
   manageWiFi();
+  if (!triggered) takeStableReadings();
 
-  takeStableReadings();
+  // Master controller to check if anything wrong
+  // Note: sumTingWongCounter completely scrapped. Instantly reacts.
+  bool sumTingWong = true;
+  if (!triggered) sumTingWong = !stableReadings[0] || !stableReadings[1] || !stableReadings[2];
+  
+  // Update the LED background task based on current state
+  if (WiFi.status() != WL_CONNECTED) {
+    currentLedMode = LED_WIFI_CONNECTING;
+  }
+  else if (sumTingWong) {
+    currentLedMode = LED_ERROR;
+  }
+  else if (currentLedMode == LED_WIFI_CONNECTING) {
+    // We just connected to wifi! Show success state.
+    currentLedMode = LED_WIFI_CONNECTED_SUCCESS; 
+  } 
+  else if (currentLedMode != LED_WIFI_CONNECTED_SUCCESS) {
+    // If not showing success sequence, just default to normal
+    currentLedMode = LED_NORMAL;
+  }
 
-  // stablereadings: 0 = top up (27), 1 = bottom up (26), 2 = bottom down (25)
-  //Serial.println("Readings #1, #2, #3: " + String(stableReadings[0]) + ", " + String(stableReadings[1]) + ", " + String(stableReadings[2]));
-  //Serial.println("Readings #1, #2, #3: " + String(digitalRead(floatTopUpPin)) + ", " + String(digitalRead(floatTopDownPin)) + ", " + String(digitalRead(floatBottomDownPin)));
-  //Serial.println("strike:" + String(strikeCounters[0]));
-
-  bool sumTingWong = stableReadings[0] || !stableReadings[1] || !stableReadings[2];
-  // master controller to check if anything wrong, led control is after
+  // Handle Relay and Web Requests
   if (sumTingWong) {
+    triggered = true;
     digitalWrite(RelayPin, HIGH);
-    //digitalWrite(MotorHigh, HIGH);
-    //digitalWrite(MotorLow, LOW);
-
-    Serial.println("HELP!!!!");
-    flashLED(50);
-    delay(100);
-    flashLED(50);
-    delay(500);
     requestError();
   }
   else {
@@ -153,84 +205,60 @@ void loop() {
     requestOK();
   }
   
-  // ---------- led control -----------
-  // Top LED control
-  if (stableReadings[0] || !stableReadings[1]) {
-    //digitalWrite(redLEDTopPin,  HIGH);
-    //digitalWrite(greenLEDTopPin, LOW); 
-  } 
-  else {
-    //digitalWrite(redLEDTopPin,   LOW);
-    //digitalWrite(greenLEDTopPin, HIGH);
-  }
-
-  // Bottom LED control
-  if (!stableReadings[2]) {
-    //digitalWrite(redLEDBottomPin, HIGH);
-    //digitalWrite(greenLEDBottomPin, LOW);
-  }
-  else {
-    //digitalWrite(redLEDBottomPin, LOW);
-    //digitalWrite(greenLEDBottomPin, HIGH);
-  }
-
-  delay(100); // increase delay later
+  delay(200); 
 }
 
+// Push to the queue instantly
+void enqueueRequest(int status) {
+  if (xQueueSend(requestQueue, &status, 0) != pdPASS) {
+    Serial.println("Queue full! Request dropped.");
+  }
+}
 
 void requestOK() {
   unsigned long currentTime = millis();
-  if (firstOKBig || currentTime - lastOKBig >= OneDay * 2) {
-    httpsRequest(200);
-    lastOKBig = millis();
-    lastOKSmall = millis();
+  if (firstOKBig || currentTime - lastOKBig >= OneDay * 7) {
+    enqueueRequest(200); 
+    lastOKBig = currentTime;
+    lastOKSmall = currentTime;
     firstOKBig = false;
-    firstOKSmall = false; // reset small one too
+    firstOKSmall = false; 
   }
   else if (firstOKSmall || currentTime - lastOKSmall >= OneDay / 24) {
-    httpsRequest(201);
-    lastOKSmall = millis();
+    enqueueRequest(201); 
+    lastOKSmall = currentTime;
     firstOKSmall = false;
   }
-  // else dont do anything
 }
 
-
-unsigned long lastError = 0; // last error timestamp
+unsigned long lastError = 0; 
 void requestError() {
   unsigned long currentTime = millis();
-  if (firstError || currentTime - lastError >= OneDay / 48) { // screams every 30 mins
-    httpsRequest(-1);
-    Serial.println("sent!");
-    lastError = millis();
-    firstError = false; // Stop it from firing continuously
+  if (firstError || currentTime - lastError >= OneDay / 48) { 
+    Serial.println("HELP!!!! Error state triggered, sending to Google...");
+    enqueueRequest(-1); 
+    lastError = currentTime;
+    firstError = false; 
   }
-  else {Serial.println("blocked - timeout");}
-  // else dont do anything
 }
 
-// wrapper for takestablereading
 void takeStableReadings() {
-  for (int x = 0; x < 1; x++) { // take reading x times (using 1 because its too sensitive otherwise)
-    for (int i = 0; i < 3; i++) {
+  for (int x = 0; x < 3; x++) { // take 3 readings
+    for (int i = 0; i < 3; i++) { // take 1 reading per sensor
       takeStableReading(i);
     }
-    delay(10); // take each reading 0.01 seconds apart
+    delay(10); 
   }
 }
 
-
-// this is different from the other functions, it uses index instead of pin # and uses that index
-// to do array stuff.
-// this makes sure false positives are less easy, it makes the program do a bunch of 'hits in a row' before it
-// can activate the actual reading.
 void takeStableReading(int index) {
   bool reading = digitalRead(sensorPins[index]);
   if (reading == true) strikeCounters[index]++;
   else strikeCounters[index]--;
-  int threshold = 3; // arbitrary number
-  int clampMax = 5; // upper bound of strikecounters`
-  // sets stablereadings to true if it hits threshold
+  
+  int threshold = 10;
+  int clampMax = 15; 
+  
   if (strikeCounters[index] > threshold) {
     stableReadings[index] = true;
   }
@@ -239,53 +267,38 @@ void takeStableReading(int index) {
   strikeCounters[index] = max(0, min(clampMax, strikeCounters[index]));
 }
 
-
-unsigned long previousMillis = 0;
-unsigned long reconnectInterval = 1000; // Start with 1 second
-const unsigned long maxInterval = 300000; // Max 5 minutes (300,000 ms)
-
-
 void manageWiFi() {
-  static unsigned long lastRetry = 0;
-  static unsigned long interval = 10000; // Start with 10 seconds
+  const long TIME = 30000;
+  static unsigned long lastRetry = millis();
+  static unsigned long interval = TIME;
 
   if (WiFi.status() == WL_CONNECTED) {
-    interval = 60000; // Reset delay when connected
+    interval = TIME;
     return;
   }
   
-  if (lastRetry == 0 || millis() - lastRetry >= interval) {
-    Serial.println("Reconnecting...");
-    WiFi.reconnect(); // Much safer/cleaner than disconnect() + begin()
+  if (millis() - lastRetry >= interval) {
+    Serial.println("WiFi not connected. Attempting reconnect...");
+    WiFi.reconnect(); 
     
     lastRetry = millis();
-    interval = min(interval * 2, 3600000UL); // Double it, max 1 hour
+    interval = min(interval * 2, 3600000UL); // Max 1 hour
   }
 }
 
-
-// sends an https request to the aquariumScream google apps script to send emails, update website, etc.
-// find aquar login on awlms google doccy.
 void httpsRequest(int status) {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi not connected, skipping request.");
-    return;
-  }
-
-  // 1. Declare the client LOCALLY so it resets every time
   WiFiClientSecure secureClient; 
   secureClient.setInsecure();
-  // secureClient.setTimeout(15000); // Optional, but usually good to keep
 
-  String url = "https://script.google.com/macros/s/AKfycbydJjaLl7ykkEbpGcqZB-bQGoa4jnrq9skWRvU00BoBAst9lSNDwM60rFoqrgd__ClJ/exec";
+  String url = "https://script.google.com/macros/s/AKfycbwdZ939IvwVngNw_QaKxRxyCrZRkLUvCy8W2hjJjwRwRUBWiH7Kasa8LhqxrhOosQZg/exec";
   url += "?status=" + String(status);
 
   HTTPClient http;
 
-  Serial.println("Connecting to server...");
+  Serial.print("Connecting to server for status: ");
+  Serial.println(status);
+  
   if (http.begin(secureClient, url)) {
-    
-    // 2. FORCE following redirects to ensure variables aren't dropped
     http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS); 
     
     int httpCode = http.GET();
@@ -293,12 +306,9 @@ void httpsRequest(int status) {
     Serial.println(httpCode);
 
     if (httpCode > 0) {
-      // 3. Print the payload to confirm Google didn't send a Login page
-      String payload = http.getString();
-      Serial.println("Payload from Google:");
-      Serial.println(payload);
+      Serial.println("Success");
     } else {
-      Serial.printf("HTTP GET failed, error: %s\n", http.errorToString(httpCode).c_str());
+      Serial.println("HTTP GET failed");
     }
     
     http.end();
